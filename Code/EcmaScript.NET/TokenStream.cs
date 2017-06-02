@@ -45,6 +45,14 @@ namespace EcmaScript.NET
             }
 
         }
+
+        internal string TokenString
+        {
+            get
+            {
+                return tokenstr;
+            }
+        }
         internal double Number
         {
             get
@@ -60,10 +68,10 @@ namespace EcmaScript.NET
                 int c;
 
 
-                for (; ; )
+                for (;;)
                 {
                     // Eat whitespace, possibly sensitive to newlines.
-                    for (; ; )
+                    for (;;)
                     {
                         c = Char;
                         if (c == EOF_CHAR)
@@ -112,8 +120,8 @@ namespace EcmaScript.NET
                     {
                         char ch = (char)c;
                         identifierStart = char.IsLetter(ch)
-                            || ch == '$'
-                            || ch == '_';
+                                          || ch == '$'
+                                          || ch == '_';
                         if (identifierStart)
                         {
                             stringBufferTop = 0;
@@ -124,7 +132,7 @@ namespace EcmaScript.NET
                     if (identifierStart)
                     {
                         bool containsEscape = isUnicodeEscapeStart;
-                        for (; ; )
+                        for (;;)
                         {
                             if (isUnicodeEscapeStart)
                             {
@@ -183,6 +191,8 @@ namespace EcmaScript.NET
                         ungetChar(c);
 
                         string str = StringFromBuffer;
+                        this.tokenstr = str;
+
                         if (!containsEscape)
                         {
                             // OPT we shouldn't have to make a string (object!) to
@@ -639,7 +649,7 @@ namespace EcmaScript.NET
                             {
                                 bool lookForSlash = false;
                                 StringBuilder sb = new StringBuilder();
-                                for (; ; )
+                                for (;;)
                                 {
                                     c = Char;
                                     if (c == EOF_CHAR)
@@ -666,10 +676,10 @@ namespace EcmaScript.NET
                                                 return NET.Token.KEEPCOMMENT;
                                             }
                                             else if (s2.StartsWith("@cc_on") ||
-                                                s2.StartsWith("@if") ||
-                                                s2.StartsWith("@elif") ||
-                                                s2.StartsWith("@else") ||
-                                                s2.StartsWith("@end"))
+                                                     s2.StartsWith("@if") ||
+                                                     s2.StartsWith("@elif") ||
+                                                     s2.StartsWith("@else") ||
+                                                     s2.StartsWith("@end"))
                                             {
                                                 this.str = s1;
                                                 return NET.Token.CONDCOMMENT;
@@ -761,7 +771,7 @@ namespace EcmaScript.NET
 
                     }
 
-                retry:
+                    retry:
                     ;
                 }
             }
@@ -994,7 +1004,7 @@ namespace EcmaScript.NET
                     return ungetBuffer[--ungetCursor];
                 }
 
-                for (; ; )
+                for (;;)
                 {
                     int c;
                     if (sourceString != null)
@@ -1269,12 +1279,12 @@ namespace EcmaScript.NET
             int id;
             string s = name;
             #region Generated Id Switch
-        L0:
+            L0:
             {
                 id = 0;
                 string X = null;
                 int c;
-            L:
+                L:
                 switch (s.Length)
                 {
                     case 2:
@@ -1509,7 +1519,7 @@ namespace EcmaScript.NET
                 if (X != null && X != s && !X.Equals(s))
                     id = 0;
             }
-        EL0:
+            EL0:
 
             #endregion
             if (id == 0)
@@ -1647,7 +1657,7 @@ namespace EcmaScript.NET
         /// <summary> </summary>
         private bool readXmlComment()
         {
-            for (int c = Char; c != EOF_CHAR; )
+            for (int c = Char; c != EOF_CHAR;)
             {
                 addToString(c);
                 if (c == '-' && peekChar() == '-')
@@ -1677,7 +1687,7 @@ namespace EcmaScript.NET
         /// <summary> </summary>
         private bool readCDATA()
         {
-            for (int c = Char; c != EOF_CHAR; )
+            for (int c = Char; c != EOF_CHAR;)
             {
                 addToString(c);
                 if (c == ']' && peekChar() == ']')
@@ -1844,6 +1854,7 @@ namespace EcmaScript.NET
         // string is found.  Fosters one class of error, but saves lots of
         // code.
         private string str = "";
+        private string tokenstr = "";
         private double dNumber;
 
 
@@ -1881,15 +1892,15 @@ namespace EcmaScript.NET
                 return true;
             UnicodeCategory unicode_category = char.GetUnicodeCategory(c);
             return unicode_category == UnicodeCategory.CurrencySymbol ||
-                unicode_category == UnicodeCategory.ConnectorPunctuation ||
-                unicode_category == UnicodeCategory.LetterNumber ||
-                unicode_category == UnicodeCategory.NonSpacingMark || IsIdentifierIgnorable(c);
+                   unicode_category == UnicodeCategory.ConnectorPunctuation ||
+                   unicode_category == UnicodeCategory.LetterNumber ||
+                   unicode_category == UnicodeCategory.NonSpacingMark || IsIdentifierIgnorable(c);
         }
 
         internal static bool IsIdentifierIgnorable(char c)
         {
             return (c >= '\u0000' && c <= '\u0008') || (c >= '\u000E' && c <= '\u001B') ||
-                (c >= '\u007F' && c <= '\u009F') || char.GetUnicodeCategory(c) == UnicodeCategory.Format;
+                   (c >= '\u007F' && c <= '\u009F') || char.GetUnicodeCategory(c) == UnicodeCategory.Format;
         }
 
         internal static bool IsJavaIdentifierStart(char c)
@@ -1901,8 +1912,8 @@ namespace EcmaScript.NET
 
             UnicodeCategory unicode_category = char.GetUnicodeCategory(c);
             return unicode_category == UnicodeCategory.LetterNumber ||
-                unicode_category == UnicodeCategory.CurrencySymbol ||
-                unicode_category == UnicodeCategory.ConnectorPunctuation;
+                   unicode_category == UnicodeCategory.CurrencySymbol ||
+                   unicode_category == UnicodeCategory.ConnectorPunctuation;
         }
     }
 

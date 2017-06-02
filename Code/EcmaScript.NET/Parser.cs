@@ -13,6 +13,7 @@
 
 using System;
 using System.Collections;
+using System.Text.RegularExpressions;
 
 using EcmaScript.NET.Collections;
 
@@ -40,6 +41,8 @@ namespace EcmaScript.NET
         internal const int CLEAR_TI_MASK = 0xFFFF;
         internal const int TI_AFTER_EOL = 1 << 16;
         internal const int TI_CHECK_LABEL = 1 << 17; // indicates to check for label
+
+        internal readonly Regex SIMPLE_IDENTIFIER_NAME_PATTERN = new Regex("^[a-zA-Z_][a-zA-Z0-9_]*$", RegexOptions.Compiled);
 
         internal CompilerEnvirons compilerEnv;
         ErrorReporter errorReporter;
@@ -331,7 +334,7 @@ namespace EcmaScript.NET
             * we've collected all the source */
             Node pn = nf.CreateLeaf(Token.BLOCK);
 
-            for (; ; )
+            for (;;)
             {
                 int tt = peekToken();
 
@@ -397,7 +400,7 @@ namespace EcmaScript.NET
             Node pn = nf.CreateBlock(ts.Lineno);
             try
             {
-                for (; ; )
+                for (;;)
                 {
                     Node n;
                     int tt = peekToken();
@@ -424,7 +427,7 @@ namespace EcmaScript.NET
                     nf.addChildToBack(pn, n);
                 }
 
-            bodyLoop_brk:
+                bodyLoop_brk:
                 ;
 
             }
@@ -670,7 +673,7 @@ namespace EcmaScript.NET
 
             // skip to end of statement
             int lineno = ts.Lineno;
-            for (; ; )
+            for (;;)
             {
                 int tt = peekTokenOrEOL();
                 consumeToken();
@@ -686,7 +689,7 @@ namespace EcmaScript.NET
                 }
             }
 
-        guessingStatementEnd_brk:
+            guessingStatementEnd_brk:
             ;
 
             return nf.CreateExprStatement(nf.CreateName("error"), lineno);
@@ -708,487 +711,487 @@ namespace EcmaScript.NET
             {
 
                 case Token.IF:
-                    {
-                        consumeToken();
+                {
+                    consumeToken();
 
-                        decompiler.AddToken(Token.IF);
-                        int lineno = ts.Lineno;
-                        Node cond = condition();
+                    decompiler.AddToken(Token.IF);
+                    int lineno = ts.Lineno;
+                    Node cond = condition();
+                    decompiler.AddEol(Token.LC);
+                    Node ifTrue = statement();
+                    Node ifFalse = null;
+                    if (matchToken(Token.ELSE))
+                    {
+                        decompiler.AddToken(Token.RC);
+                        decompiler.AddToken(Token.ELSE);
                         decompiler.AddEol(Token.LC);
-                        Node ifTrue = statement();
-                        Node ifFalse = null;
-                        if (matchToken(Token.ELSE))
-                        {
-                            decompiler.AddToken(Token.RC);
-                            decompiler.AddToken(Token.ELSE);
-                            decompiler.AddEol(Token.LC);
-                            ifFalse = statement();
-                        }
-                        decompiler.AddEol(Token.RC);
-                        pn = nf.CreateIf(cond, ifTrue, ifFalse, lineno);
-                        return pn;
+                        ifFalse = statement();
                     }
+                    decompiler.AddEol(Token.RC);
+                    pn = nf.CreateIf(cond, ifTrue, ifFalse, lineno);
+                    return pn;
+                }
 
 
                 case Token.SWITCH:
+                {
+                    consumeToken();
+
+                    decompiler.AddToken(Token.SWITCH);
+                    int lineno = ts.Lineno;
+                    mustMatchToken(Token.LP, "msg.no.paren.switch");
+                    decompiler.AddToken(Token.LP);
+                    pn = enterSwitch(expr(false), lineno, statementLabel);
+                    try
                     {
-                        consumeToken();
+                        mustMatchToken(Token.RP, "msg.no.paren.after.switch");
+                        decompiler.AddToken(Token.RP);
+                        mustMatchToken(Token.LC, "msg.no.brace.switch");
+                        decompiler.AddEol(Token.LC);
 
-                        decompiler.AddToken(Token.SWITCH);
-                        int lineno = ts.Lineno;
-                        mustMatchToken(Token.LP, "msg.no.paren.switch");
-                        decompiler.AddToken(Token.LP);
-                        pn = enterSwitch(expr(false), lineno, statementLabel);
-                        try
+                        bool hasDefault = false;
+                        for (;;)
                         {
-                            mustMatchToken(Token.RP, "msg.no.paren.after.switch");
-                            decompiler.AddToken(Token.RP);
-                            mustMatchToken(Token.LC, "msg.no.brace.switch");
-                            decompiler.AddEol(Token.LC);
-
-                            bool hasDefault = false;
-                            for (; ; )
+                            tt = nextToken();
+                            Node caseExpression;
+                            switch (tt)
                             {
-                                tt = nextToken();
-                                Node caseExpression;
-                                switch (tt)
-                                {
 
-                                    case Token.RC:
+                                case Token.RC:
 
-                                        goto switchLoop_brk;
+                                    goto switchLoop_brk;
 
 
-                                    case Token.CASE:
-                                        decompiler.AddToken(Token.CASE);
-                                        caseExpression = expr(false);
-                                        mustMatchToken(Token.COLON, "msg.no.colon.case");
-                                        decompiler.AddEol(Token.COLON);
-                                        break;
+                                case Token.CASE:
+                                    decompiler.AddToken(Token.CASE);
+                                    caseExpression = expr(false);
+                                    mustMatchToken(Token.COLON, "msg.no.colon.case");
+                                    decompiler.AddEol(Token.COLON);
+                                    break;
 
 
-                                    case Token.DEFAULT:
-                                        if (hasDefault)
-                                        {
-                                            ReportError("msg.double.switch.default");
-                                        }
-                                        decompiler.AddToken(Token.DEFAULT);
-                                        hasDefault = true;
-                                        caseExpression = null;
-                                        mustMatchToken(Token.COLON, "msg.no.colon.case");
-                                        decompiler.AddEol(Token.COLON);
-                                        break;
+                                case Token.DEFAULT:
+                                    if (hasDefault)
+                                    {
+                                        ReportError("msg.double.switch.default");
+                                    }
+                                    decompiler.AddToken(Token.DEFAULT);
+                                    hasDefault = true;
+                                    caseExpression = null;
+                                    mustMatchToken(Token.COLON, "msg.no.colon.case");
+                                    decompiler.AddEol(Token.COLON);
+                                    break;
 
 
-                                    default:
-                                        ReportError("msg.bad.switch");
+                                default:
+                                    ReportError("msg.bad.switch");
 
-                                        goto switchLoop_brk;
+                                    goto switchLoop_brk;
 
-                                }
-
-                                Node block = nf.CreateLeaf(Token.BLOCK);
-                                while ((tt = peekToken()) != Token.RC && tt != Token.CASE && tt != Token.DEFAULT && tt != Token.EOF)
-                                {
-                                    nf.addChildToBack(block, statement());
-                                }
-
-                                // caseExpression == null => add default lable
-                                nf.addSwitchCase(pn, caseExpression, block);
                             }
 
-                        switchLoop_brk:
-                            ;
+                            Node block = nf.CreateLeaf(Token.BLOCK);
+                            while ((tt = peekToken()) != Token.RC && tt != Token.CASE && tt != Token.DEFAULT && tt != Token.EOF)
+                            {
+                                nf.addChildToBack(block, statement());
+                            }
 
-                            decompiler.AddEol(Token.RC);
-                            nf.closeSwitch(pn);
+                            // caseExpression == null => add default lable
+                            nf.addSwitchCase(pn, caseExpression, block);
                         }
-                        finally
-                        {
-                            exitSwitch();
-                        }
-                        return pn;
+
+                        switchLoop_brk:
+                        ;
+
+                        decompiler.AddEol(Token.RC);
+                        nf.closeSwitch(pn);
                     }
+                    finally
+                    {
+                        exitSwitch();
+                    }
+                    return pn;
+                }
 
 
                 case Token.WHILE:
-                    {
-                        consumeToken();
-                        decompiler.AddToken(Token.WHILE);
+                {
+                    consumeToken();
+                    decompiler.AddToken(Token.WHILE);
 
-                        Node loop = enterLoop(statementLabel);
-                        try
-                        {
-                            Node cond = condition();
-                            decompiler.AddEol(Token.LC);
-                            Node body = statement();
-                            decompiler.AddEol(Token.RC);
-                            pn = nf.CreateWhile(loop, cond, body);
-                        }
-                        finally
-                        {
-                            exitLoop();
-                        }
-                        return pn;
+                    Node loop = enterLoop(statementLabel);
+                    try
+                    {
+                        Node cond = condition();
+                        decompiler.AddEol(Token.LC);
+                        Node body = statement();
+                        decompiler.AddEol(Token.RC);
+                        pn = nf.CreateWhile(loop, cond, body);
                     }
+                    finally
+                    {
+                        exitLoop();
+                    }
+                    return pn;
+                }
 
 
                 case Token.DO:
-                    {
-                        consumeToken();
-                        decompiler.AddToken(Token.DO);
-                        decompiler.AddEol(Token.LC);
+                {
+                    consumeToken();
+                    decompiler.AddToken(Token.DO);
+                    decompiler.AddEol(Token.LC);
 
-                        Node loop = enterLoop(statementLabel);
-                        try
-                        {
-                            Node body = statement();
-                            decompiler.AddToken(Token.RC);
-                            mustMatchToken(Token.WHILE, "msg.no.while.do");
-                            decompiler.AddToken(Token.WHILE);
-                            Node cond = condition();
-                            pn = nf.CreateDoWhile(loop, body, cond);
-                        }
-                        finally
-                        {
-                            exitLoop();
-                        }
-                        // Always auto-insert semicon to follow SpiderMonkey:
-                        // It is required by EMAScript but is ignored by the rest of
-                        // world, see bug 238945
-                        matchToken(Token.SEMI);
-                        decompiler.AddEol(Token.SEMI);
-                        return pn;
+                    Node loop = enterLoop(statementLabel);
+                    try
+                    {
+                        Node body = statement();
+                        decompiler.AddToken(Token.RC);
+                        mustMatchToken(Token.WHILE, "msg.no.while.do");
+                        decompiler.AddToken(Token.WHILE);
+                        Node cond = condition();
+                        pn = nf.CreateDoWhile(loop, body, cond);
                     }
+                    finally
+                    {
+                        exitLoop();
+                    }
+                    // Always auto-insert semicon to follow SpiderMonkey:
+                    // It is required by EMAScript but is ignored by the rest of
+                    // world, see bug 238945
+                    matchToken(Token.SEMI);
+                    decompiler.AddEol(Token.SEMI);
+                    return pn;
+                }
 
 
                 case Token.FOR:
+                {
+                    consumeToken();
+                    bool isForEach = false;
+                    decompiler.AddToken(Token.FOR);
+
+                    Node loop = enterLoop(statementLabel);
+                    try
                     {
-                        consumeToken();
-                        bool isForEach = false;
-                        decompiler.AddToken(Token.FOR);
 
-                        Node loop = enterLoop(statementLabel);
-                        try
+                        Node init; // Node init is also foo in 'foo in Object'
+                        Node cond; // Node cond is also object in 'foo in Object'
+                        Node incr = null; // to kill warning
+                        Node body;
+
+                        // See if this is a for each () instead of just a for ()
+                        if (matchToken(Token.NAME))
                         {
-
-                            Node init; // Node init is also foo in 'foo in Object'
-                            Node cond; // Node cond is also object in 'foo in Object'
-                            Node incr = null; // to kill warning
-                            Node body;
-
-                            // See if this is a for each () instead of just a for ()
-                            if (matchToken(Token.NAME))
+                            decompiler.AddName(ts.String);
+                            if (ts.String.Equals("each"))
                             {
-                                decompiler.AddName(ts.String);
-                                if (ts.String.Equals("each"))
-                                {
-                                    isForEach = true;
-                                }
-                                else
-                                {
-                                    ReportError("msg.no.paren.for");
-                                }
-                            }
-
-                            mustMatchToken(Token.LP, "msg.no.paren.for");
-                            decompiler.AddToken(Token.LP);
-                            tt = peekToken();
-                            if (tt == Token.SEMI)
-                            {
-                                init = nf.CreateLeaf(Token.EMPTY);
+                                isForEach = true;
                             }
                             else
                             {
-                                if (tt == Token.VAR)
-                                {
-                                    // set init to a var list or initial
-                                    consumeToken(); // consume the 'var' token
-                                    init = variables(true);
-                                }
-                                else
-                                {
-                                    init = expr(true);
-                                }
-                            }
-
-                            if (matchToken(Token.IN))
-                            {
-                                decompiler.AddToken(Token.IN);
-                                // 'cond' is the object over which we're iterating
-                                cond = expr(false);
-                            }
-                            else
-                            {
-                                // ordinary for loop
-                                mustMatchToken(Token.SEMI, "msg.no.semi.for");
-                                decompiler.AddToken(Token.SEMI);
-                                if (peekToken() == Token.SEMI)
-                                {
-                                    // no loop condition
-                                    cond = nf.CreateLeaf(Token.EMPTY);
-                                }
-                                else
-                                {
-                                    cond = expr(false);
-                                }
-
-                                mustMatchToken(Token.SEMI, "msg.no.semi.for.cond");
-                                decompiler.AddToken(Token.SEMI);
-                                if (peekToken() == Token.RP)
-                                {
-                                    incr = nf.CreateLeaf(Token.EMPTY);
-                                }
-                                else
-                                {
-                                    incr = expr(false);
-                                }
-                            }
-
-                            mustMatchToken(Token.RP, "msg.no.paren.for.ctrl");
-                            decompiler.AddToken(Token.RP);
-                            decompiler.AddEol(Token.LC);
-                            body = statement();
-                            decompiler.AddEol(Token.RC);
-
-                            if (incr == null)
-                            {
-                                // cond could be null if 'in obj' got eaten
-                                // by the init node.
-                                pn = nf.CreateForIn(loop, init, cond, body, isForEach);
-                            }
-                            else
-                            {
-                                pn = nf.CreateFor(loop, init, cond, incr, body);
+                                ReportError("msg.no.paren.for");
                             }
                         }
-                        finally
+
+                        mustMatchToken(Token.LP, "msg.no.paren.for");
+                        decompiler.AddToken(Token.LP);
+                        tt = peekToken();
+                        if (tt == Token.SEMI)
                         {
-                            exitLoop();
-                        }
-                        return pn;
-                    }
-
-
-                case Token.TRY:
-                    {
-                        consumeToken();
-                        int lineno = ts.Lineno;
-
-                        Node tryblock;
-                        Node catchblocks = null;
-                        Node finallyblock = null;
-
-                        decompiler.AddToken(Token.TRY);
-                        decompiler.AddEol(Token.LC);
-                        tryblock = statement();
-                        decompiler.AddEol(Token.RC);
-
-                        catchblocks = nf.CreateLeaf(Token.BLOCK);
-
-                        bool sawDefaultCatch = false;
-                        int peek = peekToken();
-                        if (peek == Token.CATCH)
-                        {
-                            while (matchToken(Token.CATCH))
-                            {
-                                if (sawDefaultCatch)
-                                {
-                                    ReportError("msg.catch.unreachable");
-                                }
-                                decompiler.AddToken(Token.CATCH);
-                                mustMatchToken(Token.LP, "msg.no.paren.catch");
-                                decompiler.AddToken(Token.LP);
-
-                                mustMatchToken(Token.NAME, "msg.bad.catchcond");
-                                string varName = ts.String;
-                                decompiler.AddName(varName);
-
-                                Node catchCond = null;
-                                if (matchToken(Token.IF))
-                                {
-                                    decompiler.AddToken(Token.IF);
-                                    catchCond = expr(false);
-                                }
-                                else
-                                {
-                                    sawDefaultCatch = true;
-                                }
-
-                                mustMatchToken(Token.RP, "msg.bad.catchcond");
-                                decompiler.AddToken(Token.RP);
-                                mustMatchToken(Token.LC, "msg.no.brace.catchblock");
-                                decompiler.AddEol(Token.LC);
-
-                                nf.addChildToBack(catchblocks, nf.CreateCatch(varName, catchCond, statements(), ts.Lineno));
-
-                                mustMatchToken(Token.RC, "msg.no.brace.after.body");
-                                decompiler.AddEol(Token.RC);
-                            }
-                        }
-                        else if (peek != Token.FINALLY)
-                        {
-                            mustMatchToken(Token.FINALLY, "msg.try.no.catchfinally");
-                        }
-
-                        if (matchToken(Token.FINALLY))
-                        {
-                            decompiler.AddToken(Token.FINALLY);
-                            decompiler.AddEol(Token.LC);
-                            finallyblock = statement();
-                            decompiler.AddEol(Token.RC);
-                        }
-
-                        pn = nf.CreateTryCatchFinally(tryblock, catchblocks, finallyblock, lineno);
-
-                        return pn;
-                    }
-
-
-                case Token.THROW:
-                    {
-                        consumeToken();
-                        if (peekTokenOrEOL() == Token.EOL)
-                        {
-                            // ECMAScript does not allow new lines before throw expression,
-                            // see bug 256617
-                            ReportError("msg.bad.throw.eol");
-                        }
-
-                        int lineno = ts.Lineno;
-                        decompiler.AddToken(Token.THROW);
-                        pn = nf.CreateThrow(expr(false), lineno);
-                        break;
-                    }
-
-
-                case Token.BREAK:
-                    {
-                        consumeToken();
-                        int lineno = ts.Lineno;
-
-                        decompiler.AddToken(Token.BREAK);
-
-                        // matchJumpLabelName only matches if there is one
-                        Node breakStatement = matchJumpLabelName();
-                        if (breakStatement == null)
-                        {
-                            if (loopAndSwitchSet == null || loopAndSwitchSet.size() == 0)
-                            {
-                                ReportError("msg.bad.break");
-                                return null;
-                            }
-                            breakStatement = (Node)loopAndSwitchSet.peek();
-                        }
-                        pn = nf.CreateBreak(breakStatement, lineno);
-                        break;
-                    }
-
-
-                case Token.CONTINUE:
-                    {
-                        consumeToken();
-                        int lineno = ts.Lineno;
-
-                        decompiler.AddToken(Token.CONTINUE);
-
-                        Node loop;
-                        // matchJumpLabelName only matches if there is one
-                        Node label = matchJumpLabelName();
-                        if (label == null)
-                        {
-                            if (loopSet == null || loopSet.size() == 0)
-                            {
-                                ReportError("msg.continue.outside");
-                                return null;
-                            }
-                            loop = (Node)loopSet.peek();
+                            init = nf.CreateLeaf(Token.EMPTY);
                         }
                         else
                         {
-                            loop = nf.getLabelLoop(label);
-                            if (loop == null)
+                            if (tt == Token.VAR)
                             {
-                                ReportError("msg.continue.nonloop");
-                                return null;
+                                // set init to a var list or initial
+                                consumeToken(); // consume the 'var' token
+                                init = variables(true);
+                            }
+                            else
+                            {
+                                init = expr(true);
                             }
                         }
-                        pn = nf.CreateContinue(loop, lineno);
-                        break;
+
+                        if (matchToken(Token.IN))
+                        {
+                            decompiler.AddToken(Token.IN);
+                            // 'cond' is the object over which we're iterating
+                            cond = expr(false);
+                        }
+                        else
+                        {
+                            // ordinary for loop
+                            mustMatchToken(Token.SEMI, "msg.no.semi.for");
+                            decompiler.AddToken(Token.SEMI);
+                            if (peekToken() == Token.SEMI)
+                            {
+                                // no loop condition
+                                cond = nf.CreateLeaf(Token.EMPTY);
+                            }
+                            else
+                            {
+                                cond = expr(false);
+                            }
+
+                            mustMatchToken(Token.SEMI, "msg.no.semi.for.cond");
+                            decompiler.AddToken(Token.SEMI);
+                            if (peekToken() == Token.RP)
+                            {
+                                incr = nf.CreateLeaf(Token.EMPTY);
+                            }
+                            else
+                            {
+                                incr = expr(false);
+                            }
+                        }
+
+                        mustMatchToken(Token.RP, "msg.no.paren.for.ctrl");
+                        decompiler.AddToken(Token.RP);
+                        decompiler.AddEol(Token.LC);
+                        body = statement();
+                        decompiler.AddEol(Token.RC);
+
+                        if (incr == null)
+                        {
+                            // cond could be null if 'in obj' got eaten
+                            // by the init node.
+                            pn = nf.CreateForIn(loop, init, cond, body, isForEach);
+                        }
+                        else
+                        {
+                            pn = nf.CreateFor(loop, init, cond, incr, body);
+                        }
                     }
+                    finally
+                    {
+                        exitLoop();
+                    }
+                    return pn;
+                }
+
+
+                case Token.TRY:
+                {
+                    consumeToken();
+                    int lineno = ts.Lineno;
+
+                    Node tryblock;
+                    Node catchblocks = null;
+                    Node finallyblock = null;
+
+                    decompiler.AddToken(Token.TRY);
+                    decompiler.AddEol(Token.LC);
+                    tryblock = statement();
+                    decompiler.AddEol(Token.RC);
+
+                    catchblocks = nf.CreateLeaf(Token.BLOCK);
+
+                    bool sawDefaultCatch = false;
+                    int peek = peekToken();
+                    if (peek == Token.CATCH)
+                    {
+                        while (matchToken(Token.CATCH))
+                        {
+                            if (sawDefaultCatch)
+                            {
+                                ReportError("msg.catch.unreachable");
+                            }
+                            decompiler.AddToken(Token.CATCH);
+                            mustMatchToken(Token.LP, "msg.no.paren.catch");
+                            decompiler.AddToken(Token.LP);
+
+                            mustMatchToken(Token.NAME, "msg.bad.catchcond");
+                            string varName = ts.String;
+                            decompiler.AddName(varName);
+
+                            Node catchCond = null;
+                            if (matchToken(Token.IF))
+                            {
+                                decompiler.AddToken(Token.IF);
+                                catchCond = expr(false);
+                            }
+                            else
+                            {
+                                sawDefaultCatch = true;
+                            }
+
+                            mustMatchToken(Token.RP, "msg.bad.catchcond");
+                            decompiler.AddToken(Token.RP);
+                            mustMatchToken(Token.LC, "msg.no.brace.catchblock");
+                            decompiler.AddEol(Token.LC);
+
+                            nf.addChildToBack(catchblocks, nf.CreateCatch(varName, catchCond, statements(), ts.Lineno));
+
+                            mustMatchToken(Token.RC, "msg.no.brace.after.body");
+                            decompiler.AddEol(Token.RC);
+                        }
+                    }
+                    else if (peek != Token.FINALLY)
+                    {
+                        mustMatchToken(Token.FINALLY, "msg.try.no.catchfinally");
+                    }
+
+                    if (matchToken(Token.FINALLY))
+                    {
+                        decompiler.AddToken(Token.FINALLY);
+                        decompiler.AddEol(Token.LC);
+                        finallyblock = statement();
+                        decompiler.AddEol(Token.RC);
+                    }
+
+                    pn = nf.CreateTryCatchFinally(tryblock, catchblocks, finallyblock, lineno);
+
+                    return pn;
+                }
+
+
+                case Token.THROW:
+                {
+                    consumeToken();
+                    if (peekTokenOrEOL() == Token.EOL)
+                    {
+                        // ECMAScript does not allow new lines before throw expression,
+                        // see bug 256617
+                        ReportError("msg.bad.throw.eol");
+                    }
+
+                    int lineno = ts.Lineno;
+                    decompiler.AddToken(Token.THROW);
+                    pn = nf.CreateThrow(expr(false), lineno);
+                    break;
+                }
+
+
+                case Token.BREAK:
+                {
+                    consumeToken();
+                    int lineno = ts.Lineno;
+
+                    decompiler.AddToken(Token.BREAK);
+
+                    // matchJumpLabelName only matches if there is one
+                    Node breakStatement = matchJumpLabelName();
+                    if (breakStatement == null)
+                    {
+                        if (loopAndSwitchSet == null || loopAndSwitchSet.size() == 0)
+                        {
+                            ReportError("msg.bad.break");
+                            return null;
+                        }
+                        breakStatement = (Node)loopAndSwitchSet.peek();
+                    }
+                    pn = nf.CreateBreak(breakStatement, lineno);
+                    break;
+                }
+
+
+                case Token.CONTINUE:
+                {
+                    consumeToken();
+                    int lineno = ts.Lineno;
+
+                    decompiler.AddToken(Token.CONTINUE);
+
+                    Node loop;
+                    // matchJumpLabelName only matches if there is one
+                    Node label = matchJumpLabelName();
+                    if (label == null)
+                    {
+                        if (loopSet == null || loopSet.size() == 0)
+                        {
+                            ReportError("msg.continue.outside");
+                            return null;
+                        }
+                        loop = (Node)loopSet.peek();
+                    }
+                    else
+                    {
+                        loop = nf.getLabelLoop(label);
+                        if (loop == null)
+                        {
+                            ReportError("msg.continue.nonloop");
+                            return null;
+                        }
+                    }
+                    pn = nf.CreateContinue(loop, lineno);
+                    break;
+                }
 
 
                 case Token.WITH:
+                {
+                    consumeToken();
+
+                    decompiler.AddToken(Token.WITH);
+                    int lineno = ts.Lineno;
+                    mustMatchToken(Token.LP, "msg.no.paren.with");
+                    decompiler.AddToken(Token.LP);
+                    Node obj = expr(false);
+                    mustMatchToken(Token.RP, "msg.no.paren.after.with");
+                    decompiler.AddToken(Token.RP);
+                    decompiler.AddEol(Token.LC);
+
+                    ++nestingOfWith;
+                    Node body;
+                    try
                     {
-                        consumeToken();
-
-                        decompiler.AddToken(Token.WITH);
-                        int lineno = ts.Lineno;
-                        mustMatchToken(Token.LP, "msg.no.paren.with");
-                        decompiler.AddToken(Token.LP);
-                        Node obj = expr(false);
-                        mustMatchToken(Token.RP, "msg.no.paren.after.with");
-                        decompiler.AddToken(Token.RP);
-                        decompiler.AddEol(Token.LC);
-
-                        ++nestingOfWith;
-                        Node body;
-                        try
-                        {
-                            body = statement();
-                        }
-                        finally
-                        {
-                            --nestingOfWith;
-                        }
-
-                        decompiler.AddEol(Token.RC);
-
-                        pn = nf.CreateWith(obj, body, lineno);
-                        return pn;
+                        body = statement();
                     }
+                    finally
+                    {
+                        --nestingOfWith;
+                    }
+
+                    decompiler.AddEol(Token.RC);
+
+                    pn = nf.CreateWith(obj, body, lineno);
+                    return pn;
+                }
 
 
                 case Token.VAR:
-                    {
-                        consumeToken();
-                        pn = variables(false);
-                        break;
-                    }
+                {
+                    consumeToken();
+                    pn = variables(false);
+                    break;
+                }
 
 
                 case Token.RETURN:
+                {
+                    if (!insideFunction())
                     {
-                        if (!insideFunction())
-                        {
-                            ReportError("msg.bad.return");
-                        }
-                        consumeToken();
-                        decompiler.AddToken(Token.RETURN);
-                        int lineno = ts.Lineno;
-
-                        Node retExpr;
-                        /* This is ugly, but we don't want to require a semicolon. */
-                        tt = peekTokenOrEOL();
-                        switch (tt)
-                        {
-
-                            case Token.SEMI:
-                            case Token.RC:
-                            case Token.EOF:
-                            case Token.EOL:
-                            case Token.ERROR:
-                                retExpr = null;
-                                break;
-
-                            default:
-                                retExpr = expr(false);
-                                break;
-
-                        }
-                        pn = nf.CreateReturn(retExpr, lineno);
-                        break;
+                        ReportError("msg.bad.return");
                     }
+                    consumeToken();
+                    decompiler.AddToken(Token.RETURN);
+                    int lineno = ts.Lineno;
+
+                    Node retExpr;
+                    /* This is ugly, but we don't want to require a semicolon. */
+                    tt = peekTokenOrEOL();
+                    switch (tt)
+                    {
+
+                        case Token.SEMI:
+                        case Token.RC:
+                        case Token.EOF:
+                        case Token.EOL:
+                        case Token.ERROR:
+                            retExpr = null;
+                            break;
+
+                        default:
+                            retExpr = expr(false);
+                            break;
+
+                    }
+                    pn = nf.CreateReturn(retExpr, lineno);
+                    break;
+                }
 
                 case Token.DEBUGGER:
                     consumeToken();
@@ -1220,11 +1223,11 @@ namespace EcmaScript.NET
 
 
                 case Token.FUNCTION:
-                    {
-                        consumeToken();
-                        pn = function(FunctionNode.FUNCTION_EXPRESSION_STATEMENT);
-                        return pn;
-                    }
+                {
+                    consumeToken();
+                    pn = function(FunctionNode.FUNCTION_EXPRESSION_STATEMENT);
+                    return pn;
+                }
 
 
                 case Token.DEFAULT:
@@ -1258,94 +1261,94 @@ namespace EcmaScript.NET
 
 
                 case Token.NAME:
+                {
+                    int lineno = ts.Lineno;
+                    string name = ts.String;
+                    setCheckForLabel();
+                    pn = expr(false);
+                    if (pn.Type != Token.LABEL)
                     {
-                        int lineno = ts.Lineno;
-                        string name = ts.String;
-                        setCheckForLabel();
-                        pn = expr(false);
-                        if (pn.Type != Token.LABEL)
-                        {
 
-                            if (compilerEnv.getterAndSetterSupport)
+                        if (compilerEnv.getterAndSetterSupport)
+                        {
+                            tt = peekToken();
+                            if (tt == Token.NAME)
                             {
-                                tt = peekToken();
-                                if (tt == Token.NAME)
+                                if (ts.String == "getter" || ts.String == "setter")
                                 {
-                                    if (ts.String == "getter" || ts.String == "setter")
-                                    {
-                                        pn.Type = (ts.String[0] == 'g' ? Token.SETPROP_GETTER
-                                            : Token.SETPROP_SETTER);
-                                        decompiler.AddName(" " + ts.String); // HACK: Hack (whitespace) for decmpiler
-                                        consumeToken();
-                                        matchToken(Token.ASSIGN);
-                                        decompiler.AddToken(Token.ASSIGN);
-                                        matchToken(Token.FUNCTION);
-                                        Node fn = function(FunctionNode.FUNCTION_EXPRESSION);
-                                        pn.addChildToBack(fn);
-                                    }
+                                    pn.Type = (ts.String[0] == 'g' ? Token.SETPROP_GETTER
+                                        : Token.SETPROP_SETTER);
+                                    decompiler.AddName(" " + ts.String); // HACK: Hack (whitespace) for decmpiler
+                                    consumeToken();
+                                    matchToken(Token.ASSIGN);
+                                    decompiler.AddToken(Token.ASSIGN);
+                                    matchToken(Token.FUNCTION);
+                                    Node fn = function(FunctionNode.FUNCTION_EXPRESSION);
+                                    pn.addChildToBack(fn);
                                 }
                             }
-                            pn = nf.CreateExprStatement(pn, lineno);
+                        }
+                        pn = nf.CreateExprStatement(pn, lineno);
+                    }
+                    else
+                    {
+                        // Parsed the label: push back token should be
+                        // colon that primaryExpr left untouched.
+                        if (peekToken() != Token.COLON)
+                            Context.CodeBug();
+                        consumeToken();
+                        // depend on decompiling lookahead to guess that that
+                        // last name was a label.
+                        decompiler.AddName(name);
+                        decompiler.AddEol(Token.COLON);
+
+                        if (labelSet == null)
+                        {
+                            labelSet = Hashtable.Synchronized(new Hashtable());
+                        }
+                        else if (labelSet.ContainsKey(name))
+                        {
+                            ReportError("msg.dup.label");
+                        }
+
+                        bool firstLabel;
+                        if (statementLabel == null)
+                        {
+                            firstLabel = true;
+                            statementLabel = pn;
                         }
                         else
                         {
-                            // Parsed the label: push back token should be
-                            // colon that primaryExpr left untouched.
-                            if (peekToken() != Token.COLON)
-                                Context.CodeBug();
-                            consumeToken();
-                            // depend on decompiling lookahead to guess that that
-                            // last name was a label.
-                            decompiler.AddName(name);
-                            decompiler.AddEol(Token.COLON);
-
-                            if (labelSet == null)
-                            {
-                                labelSet = Hashtable.Synchronized(new Hashtable());
-                            }
-                            else if (labelSet.ContainsKey(name))
-                            {
-                                ReportError("msg.dup.label");
-                            }
-
-                            bool firstLabel;
-                            if (statementLabel == null)
-                            {
-                                firstLabel = true;
-                                statementLabel = pn;
-                            }
-                            else
-                            {
-                                // Discard multiple label nodes and use only
-                                // the first: it allows to simplify IRFactory
-                                firstLabel = false;
-                            }
-                            labelSet[name] = statementLabel;
-                            try
-                            {
-                                pn = statementHelper(statementLabel);
-                            }
-                            finally
-                            {
-                                labelSet.Remove(name);
-                            }
-                            if (firstLabel)
-                            {
-                                pn = nf.CreateLabeledStatement(statementLabel, pn);
-                            }
-                            return pn;
+                            // Discard multiple label nodes and use only
+                            // the first: it allows to simplify IRFactory
+                            firstLabel = false;
                         }
-                        break;
+                        labelSet[name] = statementLabel;
+                        try
+                        {
+                            pn = statementHelper(statementLabel);
+                        }
+                        finally
+                        {
+                            labelSet.Remove(name);
+                        }
+                        if (firstLabel)
+                        {
+                            pn = nf.CreateLabeledStatement(statementLabel, pn);
+                        }
+                        return pn;
                     }
+                    break;
+                }
 
 
                 default:
-                    {
-                        int lineno = ts.Lineno;
-                        pn = expr(false);
-                        pn = nf.CreateExprStatement(pn, lineno);
-                        break;
-                    }
+                {
+                    int lineno = ts.Lineno;
+                    pn = expr(false);
+                    pn = nf.CreateExprStatement(pn, lineno);
+                    break;
+                }
 
             }
 
@@ -1387,7 +1390,7 @@ namespace EcmaScript.NET
 
             decompiler.AddToken(Token.VAR);
 
-            for (; ; )
+            for (;;)
             {
                 Node name;
                 Node init;
@@ -1524,7 +1527,7 @@ namespace EcmaScript.NET
         Node eqExpr(bool inForInit)
         {
             Node pn = relExpr(inForInit);
-            for (; ; )
+            for (;;)
             {
                 int tt = peekToken();
                 switch (tt)
@@ -1576,7 +1579,7 @@ namespace EcmaScript.NET
         Node relExpr(bool inForInit)
         {
             Node pn = shiftExpr();
-            for (; ; )
+            for (;;)
             {
                 int tt = peekToken();
                 switch (tt)
@@ -1606,7 +1609,7 @@ namespace EcmaScript.NET
         Node shiftExpr()
         {
             Node pn = addExpr();
-            for (; ; )
+            for (;;)
             {
                 int tt = peekToken();
                 switch (tt)
@@ -1628,7 +1631,7 @@ namespace EcmaScript.NET
         Node addExpr()
         {
             Node pn = mulExpr();
-            for (; ; )
+            for (;;)
             {
                 int tt = peekToken();
                 if (tt == Token.ADD || tt == Token.SUB)
@@ -1648,7 +1651,7 @@ namespace EcmaScript.NET
         Node mulExpr()
         {
             Node pn = unaryExpr();
-            for (; ; )
+            for (;;)
             {
                 int tt = peekToken();
                 switch (tt)
@@ -1733,19 +1736,19 @@ namespace EcmaScript.NET
 
 
                     default:
-                        {
-                            Node pn = memberExpr(true);
+                    {
+                        Node pn = memberExpr(true);
 
-                            // Don't look across a newline boundary for a postfix incop.
-                            tt = peekTokenOrEOL();
-                            if (tt == Token.INC || tt == Token.DEC)
-                            {
-                                consumeToken();
-                                decompiler.AddToken(tt);
-                                return nf.CreateIncDec(tt, true, pn);
-                            }
-                            return pn;
+                        // Don't look across a newline boundary for a postfix incop.
+                        tt = peekTokenOrEOL();
+                        if (tt == Token.INC || tt == Token.DEC)
+                        {
+                            consumeToken();
+                            decompiler.AddToken(tt);
+                            return nf.CreateIncDec(tt, true, pn);
                         }
+                        return pn;
+                    }
 
                 }
                 return nf.CreateName("err"); // Only reached on error.  Try to continue.
@@ -1901,7 +1904,7 @@ namespace EcmaScript.NET
 
         Node memberExprTail(bool allowCallSyntax, Node pn)
         {
-            for (; ; )
+            for (;;)
             {
                 int tt = peekToken();
                 switch (tt)
@@ -1910,62 +1913,74 @@ namespace EcmaScript.NET
 
                     case Token.DOT:
                     case Token.DOTDOT:
-                        {
-                            int memberTypeFlags;
-                            string s;
+                    {
+                        int memberTypeFlags;
+                        string s;
+                        Match match;
 
-                            consumeToken();
-                            decompiler.AddToken(tt);
-                            memberTypeFlags = 0;
-                            if (tt == Token.DOTDOT)
-                            {
-                                mustHaveXML();
-                                memberTypeFlags = Node.DESCENDANTS_FLAG;
-                            }
-                            if (!compilerEnv.isXmlAvailable())
-                            {
-                                mustMatchToken(Token.NAME, "msg.no.name.after.dot");
+                        consumeToken();
+                        decompiler.AddToken(tt);
+                        memberTypeFlags = 0;
+                        if (tt == Token.DOTDOT)
+                        {
+                            mustHaveXML();
+                            memberTypeFlags = Node.DESCENDANTS_FLAG;
+                        }
+                        if (!compilerEnv.isXmlAvailable())
+                        {
+                            mustMatchToken(Token.NAME, "msg.no.name.after.dot");
+                            s = ts.String;
+                            decompiler.AddName(s);
+                            pn = nf.CreatePropertyGet(pn, null, s, memberTypeFlags);
+                            break;
+                        }
+
+
+                        tt = nextToken();
+
+                        switch (tt)
+                        {
+
+                            // handles: name, ns::name, ns::*, ns::[expr]
+                            case Token.NAME:
                                 s = ts.String;
                                 decompiler.AddName(s);
-                                pn = nf.CreatePropertyGet(pn, null, s, memberTypeFlags);
+                                pn = propertyName(pn, s, memberTypeFlags);
                                 break;
-                            }
+
+                            // handles: *, *::name, *::*, *::[expr]
+
+                            case Token.MUL:
+                                decompiler.AddName("*");
+                                pn = propertyName(pn, "*", memberTypeFlags);
+                                break;
+
+                            // handles: '@attr', '@ns::attr', '@ns::*', '@ns::*',
+                            //          '@::attr', '@::*', '@*', '@*::attr', '@*::*'
+
+                            case Token.XMLATTR:
+                                decompiler.AddToken(Token.XMLATTR);
+                                pn = attributeAccess(pn, memberTypeFlags);
+                                break;
 
 
-                            tt = nextToken();
-
-                            switch (tt)
-                            {
-
-                                // handles: name, ns::name, ns::*, ns::[expr]
-                                case Token.NAME:
-                                    s = ts.String;
+                            default:
+                                s = ts.TokenString;
+                                match = SIMPLE_IDENTIFIER_NAME_PATTERN.Match(s);
+                                if (match.Success)
+                                {
                                     decompiler.AddName(s);
                                     pn = propertyName(pn, s, memberTypeFlags);
-                                    break;
-
-                                // handles: *, *::name, *::*, *::[expr]
-
-                                case Token.MUL:
-                                    decompiler.AddName("*");
-                                    pn = propertyName(pn, "*", memberTypeFlags);
-                                    break;
-
-                                // handles: '@attr', '@ns::attr', '@ns::*', '@ns::*',
-                                //          '@::attr', '@::*', '@*', '@*::attr', '@*::*'
-
-                                case Token.XMLATTR:
-                                    decompiler.AddToken(Token.XMLATTR);
-                                    pn = attributeAccess(pn, memberTypeFlags);
-                                    break;
-
-
-                                default:
+                                    AddWarning("msg.reserved.keyword", s);
+                                }
+                                else
+                                {
                                     ReportError("msg.no.name.after.dot");
-                                    break;
+                                }
+                                break;
 
-                            }
                         }
+                    }
                         break;
 
 
@@ -2009,7 +2024,7 @@ namespace EcmaScript.NET
                 }
             }
 
-        tailLoop_brk:
+            tailLoop_brk:
             ;
 
             return pn;
@@ -2029,11 +2044,11 @@ namespace EcmaScript.NET
 
                 // handles: @name, @ns::name, @ns::*, @ns::[expr]
                 case Token.NAME:
-                    {
-                        string s = ts.String;
-                        decompiler.AddName(s);
-                        pn = propertyName(pn, s, memberTypeFlags);
-                    }
+                {
+                    string s = ts.String;
+                    decompiler.AddName(s);
+                    pn = propertyName(pn, s, memberTypeFlags);
+                }
                     break;
 
                 // handles: @*, @*::name, @*::*, @*::[expr]
@@ -2139,138 +2154,138 @@ namespace EcmaScript.NET
 
 
                     case Token.LB:
+                    {
+                        ObjArray elems = new ObjArray();
+                        int skipCount = 0;
+                        decompiler.AddToken(Token.LB);
+                        bool after_lb_or_comma = true;
+                        for (;;)
                         {
-                            ObjArray elems = new ObjArray();
-                            int skipCount = 0;
-                            decompiler.AddToken(Token.LB);
-                            bool after_lb_or_comma = true;
-                            for (; ; )
-                            {
-                                tt = peekToken();
+                            tt = peekToken();
 
-                                if (tt == Token.COMMA)
+                            if (tt == Token.COMMA)
+                            {
+                                consumeToken();
+                                decompiler.AddToken(Token.COMMA);
+                                if (!after_lb_or_comma)
                                 {
-                                    consumeToken();
-                                    decompiler.AddToken(Token.COMMA);
-                                    if (!after_lb_or_comma)
-                                    {
-                                        after_lb_or_comma = true;
-                                    }
-                                    else
-                                    {
-                                        elems.add((object)null);
-                                        ++skipCount;
-                                    }
-                                }
-                                else if (tt == Token.RB)
-                                {
-                                    consumeToken();
-                                    decompiler.AddToken(Token.RB);
-                                    break;
+                                    after_lb_or_comma = true;
                                 }
                                 else
                                 {
-                                    if (!after_lb_or_comma)
-                                    {
-                                        ReportError("msg.no.bracket.arg");
-                                    }
-                                    elems.add(assignExpr(false));
-                                    after_lb_or_comma = false;
+                                    elems.add((object)null);
+                                    ++skipCount;
                                 }
                             }
-                            return nf.CreateArrayLiteral(elems, skipCount);
+                            else if (tt == Token.RB)
+                            {
+                                consumeToken();
+                                decompiler.AddToken(Token.RB);
+                                break;
+                            }
+                            else
+                            {
+                                if (!after_lb_or_comma)
+                                {
+                                    ReportError("msg.no.bracket.arg");
+                                }
+                                elems.add(assignExpr(false));
+                                after_lb_or_comma = false;
+                            }
                         }
+                        return nf.CreateArrayLiteral(elems, skipCount);
+                    }
 
 
                     case Token.LC:
+                    {
+                        ObjArray elems = new ObjArray();
+                        decompiler.AddToken(Token.LC);
+                        if (!matchToken(Token.RC))
                         {
-                            ObjArray elems = new ObjArray();
-                            decompiler.AddToken(Token.LC);
-                            if (!matchToken(Token.RC))
+
+                            bool first = true;
+                            do
                             {
+                                object property;
 
-                                bool first = true;
-                                do
+                                if (!first)
+                                    decompiler.AddToken(Token.COMMA);
+                                else
+                                    first = false;
+
+                                tt = peekToken();
+                                switch (tt)
                                 {
-                                    object property;
 
-                                    if (!first)
-                                        decompiler.AddToken(Token.COMMA);
-                                    else
-                                        first = false;
-
-                                    tt = peekToken();
-                                    switch (tt)
-                                    {
-
-                                        case Token.NAME:
-                                        case Token.STRING:
-                                            consumeToken();
-                                            if (compilerEnv.getterAndSetterSupport)
-                                            {
-                                                if (tt == Token.NAME)
-                                                    if (CheckForGetOrSet(elems) || CheckForGetterOrSetter(elems))
-                                                        goto next_prop;
-                                            }
-
-
-                                            // map NAMEs to STRINGs in object literal context
-                                            // but tell the decompiler the proper type
-                                            string s = ts.String;
+                                    case Token.NAME:
+                                    case Token.STRING:
+                                        consumeToken();
+                                        if (compilerEnv.getterAndSetterSupport)
+                                        {
                                             if (tt == Token.NAME)
-                                            {
-                                                decompiler.AddName(s);
-                                            }
-                                            else
-                                            {
-                                                decompiler.AddString(s);
-                                            }
-                                            property = ScriptRuntime.getIndexObject(s);
-
-                                            break;
+                                                if (CheckForGetOrSet(elems) || CheckForGetterOrSetter(elems))
+                                                    goto next_prop;
+                                        }
 
 
-                                        case Token.NUMBER:
-                                            consumeToken();
-                                            double n = ts.Number;
-                                            decompiler.AddNumber(n);
-                                            property = ScriptRuntime.getIndexObject(n);
-                                            break;
+                                        // map NAMEs to STRINGs in object literal context
+                                        // but tell the decompiler the proper type
+                                        string s = ts.String;
+                                        if (tt == Token.NAME)
+                                        {
+                                            decompiler.AddName(s);
+                                        }
+                                        else
+                                        {
+                                            decompiler.AddString(s);
+                                        }
+                                        property = ScriptRuntime.getIndexObject(s);
+
+                                        break;
 
 
-                                        case Token.RC:
-                                            // trailing comma is OK.
+                                    case Token.NUMBER:
+                                        consumeToken();
+                                        double n = ts.Number;
+                                        decompiler.AddNumber(n);
+                                        property = ScriptRuntime.getIndexObject(n);
+                                        break;
 
-                                            goto commaloop_brk;
 
-                                        default:
-                                            ReportError("msg.bad.prop");
+                                    case Token.RC:
+                                        // trailing comma is OK.
 
-                                            goto commaloop_brk;
+                                        goto commaloop_brk;
 
-                                    }
-                                    mustMatchToken(Token.COLON, "msg.no.colon.prop");
+                                    default:
+                                        ReportError("msg.bad.prop");
 
-                                    // OBJLIT is used as ':' in object literal for
-                                    // decompilation to solve spacing ambiguity.
-                                    decompiler.AddToken(Token.OBJECTLIT);
-                                    elems.add(property);
-                                    elems.add(assignExpr(false));
+                                        goto commaloop_brk;
+
+                                }
+                                mustMatchToken(Token.COLON, "msg.no.colon.prop");
+
+                                // OBJLIT is used as ':' in object literal for
+                                // decompilation to solve spacing ambiguity.
+                                decompiler.AddToken(Token.OBJECTLIT);
+                                elems.add(property);
+                                elems.add(assignExpr(false));
 
                                 next_prop:
-                                    ;
-                                }
-                                while (matchToken(Token.COMMA));
+                                ;
+                            }
+                            while (matchToken(Token.COMMA));
 
                             commaloop_brk:
-                                ;
+                            ;
 
 
-                                mustMatchToken(Token.RC, "msg.no.brace.prop");
-                            }
-                            decompiler.AddToken(Token.RC);
-                            return nf.CreateObjectLiteral(elems);
+                            mustMatchToken(Token.RC, "msg.no.brace.prop");
                         }
+                        decompiler.AddToken(Token.RC);
+                        return nf.CreateObjectLiteral(elems);
+                    }
 
 
                     case Token.LP:
@@ -2295,60 +2310,60 @@ namespace EcmaScript.NET
 
 
                     case Token.NAME:
+                    {
+                        string name = ts.String;
+                        if ((ttFlagged & TI_CHECK_LABEL) != 0)
                         {
-                            string name = ts.String;
-                            if ((ttFlagged & TI_CHECK_LABEL) != 0)
+                            if (peekToken() == Token.COLON)
                             {
-                                if (peekToken() == Token.COLON)
-                                {
-                                    // Do not consume colon, it is used as unwind indicator
-                                    // to return to statementHelper.
-                                    // TODO: Better way?
-                                    return nf.CreateLabel(ts.Lineno);
-                                }
+                                // Do not consume colon, it is used as unwind indicator
+                                // to return to statementHelper.
+                                // TODO: Better way?
+                                return nf.CreateLabel(ts.Lineno);
                             }
-
-                            decompiler.AddName(name);
-                            if (compilerEnv.isXmlAvailable())
-                            {
-                                pn = propertyName(null, name, 0);
-                            }
-                            else
-                            {
-                                pn = nf.CreateName(name);
-                            }
-                            return pn;
                         }
+
+                        decompiler.AddName(name);
+                        if (compilerEnv.isXmlAvailable())
+                        {
+                            pn = propertyName(null, name, 0);
+                        }
+                        else
+                        {
+                            pn = nf.CreateName(name);
+                        }
+                        return pn;
+                    }
 
 
                     case Token.NUMBER:
-                        {
-                            double n = ts.Number;
-                            decompiler.AddNumber(n);
-                            return nf.CreateNumber(n);
-                        }
+                    {
+                        double n = ts.Number;
+                        decompiler.AddNumber(n);
+                        return nf.CreateNumber(n);
+                    }
 
 
                     case Token.STRING:
-                        {
-                            string s = ts.String;
-                            decompiler.AddString(s);
-                            return nf.CreateString(s);
-                        }
+                    {
+                        string s = ts.String;
+                        decompiler.AddString(s);
+                        return nf.CreateString(s);
+                    }
 
 
                     case Token.DIV:
                     case Token.ASSIGN_DIV:
-                        {
-                            // Got / or /= which should be treated as regexp in fact
-                            ts.readRegExp(tt);
-                            string flags = ts.regExpFlags;
-                            ts.regExpFlags = null;
-                            string re = ts.String;
-                            decompiler.AddRegexp(re, flags);
-                            int index = currentScriptOrFn.addRegexp(re, flags);
-                            return nf.CreateRegExp(index);
-                        }
+                    {
+                        // Got / or /= which should be treated as regexp in fact
+                        ts.readRegExp(tt);
+                        string flags = ts.regExpFlags;
+                        ts.regExpFlags = null;
+                        string re = ts.String;
+                        decompiler.AddRegexp(re, flags);
+                        int index = currentScriptOrFn.addRegexp(re, flags);
+                        return nf.CreateRegExp(index);
+                    }
 
 
                     case Token.NULL:
